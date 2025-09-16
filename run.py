@@ -7,6 +7,7 @@ from exp.exp_imputation import Exp_Imputation
 from exp.exp_short_term_forecasting import Exp_Short_Term_Forecast
 from exp.exp_anomaly_detection import Exp_Anomaly_Detection
 from exp.exp_classification import Exp_Classification
+from exp.exp_crc import Exp_CRC  # <<< 变更点 1：导入您的新实验类
 from utils.print_args import print_args
 import random
 import numpy as np
@@ -25,8 +26,14 @@ if __name__ == '__main__':
     parser.add_argument('--is_training', type=int, required=True, default=1, help='status')
     parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
     parser.add_argument('--model', type=str, required=True, default='Autoformer',
-                        help='model name, options: [Autoformer, Transformer, TimesNet]')
+                        help='model name, options: [Autoformer, Transformer, TimesNet, CRC]') # 在帮助信息里加入 CRC
 
+    # <<< 变更点 2：为 CRC 流程添加专属参数 >>>
+    parser.add_argument('--baseline_model', type=str, default='DLinear', 
+                        help='[CRC only] baseline model name, options: [DLinear, Autoformer, etc.]')
+    parser.add_argument('--q_val', type=int, default=3, 
+                        help='[CRC only] Q value for the STCL_Core in the CRC model')
+    
     # data loader
     parser.add_argument('--data', type=str, required=True, default='ETTh1', help='dataset type')
     parser.add_argument('--root_path', type=str, default='./data/ETT/', help='root path of the data file')
@@ -109,10 +116,6 @@ if __name__ == '__main__':
                         help='hidden layer dimensions of projector (List)')
     parser.add_argument('--p_hidden_layers', type=int, default=2, help='number of hidden layers in projector')
 
-    # metrics (dtw)
-    parser.add_argument('--use_dtw', type=bool, default=False,
-                        help='the controller of using dtw metric (dtw is time consuming, not suggested unless necessary)')
-
     # Augmentation
     parser.add_argument('--augmentation_ratio', type=int, default=0, help="How many times to augment")
     parser.add_argument('--seed', type=int, default=2, help="Randomization seed")
@@ -137,10 +140,9 @@ if __name__ == '__main__':
                         help="Discrimitive shapeDTW warp preset augmentation")
     parser.add_argument('--extra_tag', type=str, default="", help="Anything extra")
 
-    # TimeXer
-    parser.add_argument('--patch_len', type=int, default=16, help='patch length')
-
     args = parser.parse_args()
+    
+    # --- Device Setup ---
     if torch.cuda.is_available() and args.use_gpu:
         args.device = torch.device('cuda:{}'.format(args.gpu))
         print('Using GPU')
@@ -160,23 +162,30 @@ if __name__ == '__main__':
     print('Args in experiment:')
     print_args(args)
 
-    if args.task_name == 'long_term_forecast':
-        Exp = Exp_Long_Term_Forecast
-    elif args.task_name == 'short_term_forecast':
-        Exp = Exp_Short_Term_Forecast
-    elif args.task_name == 'imputation':
-        Exp = Exp_Imputation
-    elif args.task_name == 'anomaly_detection':
-        Exp = Exp_Anomaly_Detection
-    elif args.task_name == 'classification':
-        Exp = Exp_Classification
+    # <<< 变更点 3：修改实验选择逻辑，优先判断是否为 CRC >>>
+    if args.model == 'CRC':
+        if args.task_name not in ['long_term_forecast', 'short_term_forecast']:
+            raise ValueError("CRC model is only applicable for forecasting tasks.")
+        Exp = Exp_CRC
     else:
-        Exp = Exp_Long_Term_Forecast
+        # 沿用之前的逻辑
+        if args.task_name == 'long_term_forecast':
+            Exp = Exp_Long_Term_Forecast
+        elif args.task_name == 'short_term_forecast':
+            Exp = Exp_Short_Term_Forecast
+        elif args.task_name == 'imputation':
+            Exp = Exp_Imputation
+        elif args.task_name == 'anomaly_detection':
+            Exp = Exp_Anomaly_Detection
+        elif args.task_name == 'classification':
+            Exp = Exp_Classification
+        else:
+            Exp = Exp_Long_Term_Forecast
 
     if args.is_training:
         for ii in range(args.itr):
             # setting record of experiments
-            exp = Exp(args)  # set experiments
+            # CRC的setting可以单独定制，也可以用通用的，这里为了简单先用通用的
             setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
                 args.task_name,
                 args.model_id,
@@ -198,6 +207,7 @@ if __name__ == '__main__':
                 args.distil,
                 args.des, ii)
 
+            exp = Exp(args)  # set experiments
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
 
