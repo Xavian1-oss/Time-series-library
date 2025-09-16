@@ -140,18 +140,6 @@ if __name__ == '__main__':
     # TimeXer
     parser.add_argument('--patch_len', type=int, default=16, help='patch length')
 
-    # ---------------------------
-    # PIR integration (new)
-    # ---------------------------
-    parser.add_argument('--use_pir', type=int, default=0,
-                        help='enable PIR pipeline (1=on, 0=off)')
-    parser.add_argument('--pir_topk', type=int, default=20,
-                        help='retrieval top-k for PIR GlobalRetriever')
-    parser.add_argument('--pir_lambda_aux', type=float, default=1.0,
-                        help='aux loss weight for PIR (uncertainty proxy)')
-    parser.add_argument('--pir_target_channel', type=int, default=0,
-                       help='target channel index to be fused by PIR')
-
     args = parser.parse_args()
     if torch.cuda.is_available() and args.use_gpu:
         args.device = torch.device('cuda:{}'.format(args.gpu))
@@ -189,7 +177,7 @@ if __name__ == '__main__':
         for ii in range(args.itr):
             # setting record of experiments
             exp = Exp(args)  # set experiments
-            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_pir{}_topk{}_lam{}_tgt{}_{}_{}'.format(
+            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
                 args.task_name,
                 args.model_id,
                 args.model,
@@ -208,10 +196,6 @@ if __name__ == '__main__':
                 args.factor,
                 args.embed,
                 args.distil,
-                args.use_pir,
-                args.pir_topk,
-                args.pir_lambda_aux,
-                args.pir_target_channel,
                 args.des, ii)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
@@ -226,7 +210,7 @@ if __name__ == '__main__':
     else:
         exp = Exp(args)  # set experiments
         ii = 0
-        setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_pir{}_topk{}_lam{}_tgt{}_{}_{}'.format(
+        setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
             args.task_name,
             args.model_id,
             args.model,
@@ -245,10 +229,6 @@ if __name__ == '__main__':
             args.factor,
             args.embed,
             args.distil,
-            args.use_pir,
-            args.pir_topk,
-            args.pir_lambda_aux,
-            args.pir_target_channel,
             args.des, ii)
 
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
