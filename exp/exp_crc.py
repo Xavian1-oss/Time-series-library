@@ -1,5 +1,3 @@
-# ./exp/exp_crc.py
-
 import os
 import torch
 import numpy as np
@@ -10,6 +8,7 @@ from models.CRC import PretrainableEncoderMTL, HybridTrainer, mtl_pretrain_train
 from data_provider.data_factory import data_provider
 from utils.metrics import metric
 from utils.dtw_metric import accelerated_dtw
+from utils.tools import visual
 
 warnings.filterwarnings('ignore')
 
@@ -21,14 +20,31 @@ class Exp_CRC(Exp_Long_Term_Forecast):
     """
     def __init__(self, args):
         """
-        5. 修改初始化方法：
-           - 调用 super().__init__(args) 来正确地初始化父类 Exp_Long_Term_Forecast。
-           - 这使得 Exp_CRC 可以自动继承父类所有有用的方法和属性。
+        关键修复：我们不再调用 super().__init__(args)。
+
+        父类的初始化链条 (Exp_Basic -> Exp_Long_Term_Forecast) 强制要求立即构建模型，
+        而 CRC 在初始化阶段不支持这样做。
+        
+        我们继承自 Exp_Long_Term_Forecast 是为了它其他有用的方法（比如通用的 test 方法），
+        但我们需要一个自定义的初始化流程。我们在这里手动执行最核心的设置。
         """
-        super(Exp_CRC, self).__init__(args)
+        self.args = args
+        self.device = args.device
 
         self.baseline_model = None
         self.hybrid_corrector = None
+    
+    def _build_model(self):
+        """
+        关键修复：重写此方法以覆盖父类的行为。
+        
+        这可以防止父类在初始化时，尝试去构建一个名为 "CRC" 的、实际上并不存在的单一模型。
+        CRC的真实模型（基线和校正器）是在 train 方法中被动态、分阶段构建的。
+        
+        我们在这里返回 None 是安全的，因为在CRC的流程中，我们从不使用 self.model 这个属性，
+        而是使用我们自己定义的 self.baseline_model 和 self.hybrid_corrector。
+        """
+        return None
 
     def _get_predictions(self, model, data_loader):
         """
@@ -174,6 +190,19 @@ class Exp_CRC(Exp_Long_Term_Forecast):
         print(f"MAE 相对提升率: {mae_improvement:.2f}%")
         print(f"MSE 相对提升率: {mse_improvement:.2f}%")
         print("=" * 50)
+
+        # 添加画图功能，更加直观
+        folder_path = './test_results/' + setting + '/'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+            
+        print("正在生成可视化图片...")
+        for i in range(min(W_te_synced.shape[0], 100)): # 限制最多生成100张图，防止过多
+            if i % 20 == 0: # 每隔20个样本保存一张图
+                gt = np.concatenate((W_te_synced[i, :, -1], y_te_synced[i, :, -1]), axis=0)
+                pd = np.concatenate((W_te_synced[i, :, -1], yfinal_te[i, :, -1]), axis=0)
+                visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
+        print(f"可视化图片已保存至: {folder_path}")
         
         # 保存结果的逻辑保持不变
         folder_path = './results/' + setting + '/'

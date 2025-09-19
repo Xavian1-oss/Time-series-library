@@ -69,81 +69,6 @@ def build_physics_priors(W: np.ndarray, A: np.ndarray, K: int = 24,
         sd = F.std(axis=(0,1), keepdims=True) + 1e-6
     return ((F - mu) / sd).astype(np.float32), mu, sd
 
-
-# ===============================================
-# Baseline Model (DLinear 基线模型)
-# ===============================================
-class DLinearBaseline(nn.Module):
-    """
-    DLinear 模型的一个独立实现，可用作基线。
-    """
-    def __init__(self, P: int, H: int, N: int, decomp_kernel: int = 25,
-                 variant: str = 'CM', lr: float = 1e-3, wd: float = 1e-4,
-                 batch_size: int = 256, max_epochs: int = 60, patience: int = 10):
-        super().__init__()
-        assert decomp_kernel % 2 == 1, "decomp_kernel must be odd."
-        self.P, self.H, self.N = P, H, N
-        self.variant = variant.upper()
-        self.batch_size, self.lr, self.wd = batch_size, lr, wd
-        self.max_epochs, self.patience = max_epochs, patience
-        pad = (decomp_kernel - 1) // 2
-        self.trend_conv = nn.Conv1d(N, N, kernel_size=decomp_kernel, padding=pad, groups=N, bias=False)
-        with torch.no_grad():
-            w = torch.ones(N, 1, decomp_kernel) / decomp_kernel
-            self.trend_conv.weight.copy_(w)
-        for p in self.trend_conv.parameters(): p.requires_grad = False
-        self.linear_season = nn.Linear(P, H)
-        self.linear_trend = nn.Linear(P, H)
-        self.mixer = nn.Linear(N, N, bias=True) if self.variant == 'CM' else nn.Identity()
-        self.best_state = None
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.to(self.device)
-
-    def _forward_core(self, Wb):
-        x = Wb.permute(0, 2, 1)
-        trend = self.trend_conv(x)
-        season = x - trend
-        y_s = self.linear_season(season)
-        y_t = self.linear_trend(trend)
-        y = y_s + y_t
-        y = self.mixer(y.permute(0, 2, 1))
-        return y
-
-    def fit(self, W_tr: np.ndarray, y_tr: np.ndarray, W_vl: np.ndarray, y_vl: np.ndarray):
-        tr_ds = torch.utils.data.TensorDataset(torch.from_numpy(W_tr), torch.from_numpy(y_tr))
-        vl_W, vl_y = torch.from_numpy(W_vl).to(self.device), torch.from_numpy(y_vl).to(self.device)
-        tr_dl = torch.utils.data.DataLoader(tr_ds, batch_size=self.batch_size, shuffle=True)
-        opt = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
-        best, bad = float("inf"), 0
-        for ep in range(1, self.max_epochs + 1):
-            self.train(); total_loss = 0.0
-            for Wb, yb in tr_dl:
-                Wb, yb = Wb.to(self.device), yb.to(self.device)
-                opt.zero_grad(); y_hat = self._forward_core(Wb)
-                loss = F.mse_loss(y_hat, yb)
-                loss.backward(); torch.nn.utils.clip_grad_norm_(self.parameters(), 1.0); opt.step()
-                total_loss += loss.item()
-            self.eval()
-            with torch.no_grad():
-                mae_v = F.l1_loss(self._forward_core(vl_W), vl_y).item()
-            print(f"[DLinear-{self.variant}] Epoch {ep:03d} | TrainLoss={total_loss/max(1,len(tr_dl)):.4f} | Val MAE={mae_v:.4f}")
-            if mae_v < best - 1e-6:
-                best, bad, self.best_state = mae_v, 0, deepcopy(self.state_dict())
-            else:
-                bad += 1
-                if bad >= self.patience:
-                    print(f"[DLinear-{self.variant}] Early stopping at epoch {ep}. Best Val MAE={best:.4f}")
-                    break
-        if self.best_state is not None: self.load_state_dict(self.best_state)
-
-    def predict(self, W: np.ndarray) -> np.ndarray:
-        self.eval(); ys = []
-        with torch.no_grad():
-            for Wb in torch.from_numpy(W).split(1024):
-                ys.append(self._forward_core(Wb.to(self.device)).cpu().numpy())
-        return np.concatenate(ys, axis=0)
-
-
 # ===============================================
 # Core CRC Model Components (CRC 核心模型组件)
 # ===============================================
@@ -267,12 +192,12 @@ class SmallMLP(nn.Module):
         return self.net(Z)
 
 class HybridTrainer:
-    def __init__(self, encoder, A, F_mu, F_sd, H: int, N: int,
-                 k_trust=2.0, tau_min=0.05, l2_delta=1e-4, lr=1e-3, wd=1e-4, patience=20, max_epochs=60, batch_size=64):
+    def __init__(self, encoder, A, F_mu, F_sd, H: int, N: int, P: int,
+                 k_trust=2.0, tau_min=0.05, l2_delta=1e-4, lr=1e-4, wd=1e-4, patience=20, max_epochs=60, batch_size=64):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.encoder = deepcopy(encoder).to(self.device).eval()
         for p in self.encoder.parameters(): p.requires_grad = False
-        self.A, self.F_mu, self.F_sd, self.H, self.N = A, F_mu, F_sd, H, N
+        self.A, self.F_mu, self.F_sd, self.H, self.N, self.P = A, F_mu, F_sd, H, N, P
         self.k_trust, self.tau_min, self.l2_delta, self.lr, self.wd = k_trust, tau_min, l2_delta, lr, wd
         self.patience, self.max_epochs, self.batch_size = patience, max_epochs, batch_size
         self.mlps = None

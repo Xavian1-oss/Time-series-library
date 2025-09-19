@@ -28,11 +28,16 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, required=True, default='Autoformer',
                         help='model name, options: [Autoformer, Transformer, TimesNet, CRC]') # 在帮助信息里加入 CRC
 
-    # <<< 变更点 2：为 CRC 流程添加专属参数 >>>
+    # <<< 为 CRC 流程添加专属参数 >>>
     parser.add_argument('--baseline_model', type=str, default='DLinear', 
                         help='[CRC only] baseline model name, options: [DLinear, Autoformer, etc.]')
     parser.add_argument('--q_val', type=int, default=3, 
                         help='[CRC only] Q value for the STCL_Core in the CRC model')
+    parser.add_argument('--k_val', type=int, default=24, 
+                    help='[CRC only] window size K for physics priors calculation')
+    parser.add_argument('--use_dtw', action='store_true', 
+                    help='Whether to calculate DTW metric in test phase', 
+                    default=False)
     
     # data loader
     parser.add_argument('--data', type=str, required=True, default='ETTh1', help='dataset type')

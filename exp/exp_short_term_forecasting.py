@@ -26,9 +26,6 @@ class Exp_Short_Term_Forecast(Exp_Basic):
             self.args.seq_len = 2 * self.args.pred_len  # input_len = 2*pred_len
             self.args.label_len = self.args.pred_len
             self.args.frequency_map = M4Meta.frequency_map[self.args.seasonal_patterns]
-        else:
-            self.args.frequency_map = None
-
         model = self.model_dict[self.args.model].Model(self.args).float()
 
         if self.args.use_multi_gpu and self.args.use_gpu:
@@ -95,13 +92,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
 
                 batch_y_mark = batch_y_mark[:, -self.args.pred_len:, f_dim:].to(self.device)
-                # 修改后的代码
-                if self.args.loss == 'MSE':
-                    # 对于标准的 MSE Loss，只需要传入预测值和真实值
-                    loss_value = criterion(outputs, batch_y)
-                else:
-                    # 对于代码库中自定义的其他损失函数（如 MASE, SMAPE 等），使用原来的多参数调用方式
-                    loss_value = criterion(batch_x, self.args.frequency_map, outputs, batch_y, batch_y_mark)
+                loss_value = criterion(batch_x, self.args.frequency_map, outputs, batch_y, batch_y_mark)
                 loss_sharpness = mse((outputs[:, 1:, :] - outputs[:, :-1, :]), (batch_y[:, 1:, :] - batch_y[:, :-1, :]))
                 loss = loss_value  # + loss_sharpness * 1e-5
                 train_loss.append(loss.item())
@@ -135,38 +126,36 @@ class Exp_Short_Term_Forecast(Exp_Basic):
 
         return self.model
 
-    # 新的、通用的 vali 方法
     def vali(self, train_loader, vali_loader, criterion):
-        total_loss = []
-        self.model.eval() # 切换到评估模式
+        x, _ = train_loader.dataset.last_insample_window()
+        y = vali_loader.dataset.timeseries
+        x = torch.tensor(x, dtype=torch.float32).to(self.device)
+        x = x.unsqueeze(-1)
+
+        self.model.eval()
         with torch.no_grad():
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(vali_loader):
-                batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float().to(self.device)
-                batch_y_mark = batch_y_mark.float().to(self.device)
+            # decoder input
+            B, _, C = x.shape
+            dec_inp = torch.zeros((B, self.args.pred_len, C)).float().to(self.device)
+            dec_inp = torch.cat([x[:, -self.args.label_len:, :], dec_inp], dim=1).float()
+            # encoder - decoder
+            outputs = torch.zeros((B, self.args.pred_len, C)).float()  # .to(self.device)
+            id_list = np.arange(0, B, 500)  # validation set size
+            id_list = np.append(id_list, B)
+            for i in range(len(id_list) - 1):
+                outputs[id_list[i]:id_list[i + 1], :, :] = self.model(x[id_list[i]:id_list[i + 1]], None,
+                                                                      dec_inp[id_list[i]:id_list[i + 1]],
+                                                                      None).detach().cpu()
+            f_dim = -1 if self.args.features == 'MS' else 0
+            outputs = outputs[:, -self.args.pred_len:, f_dim:]
+            pred = outputs
+            true = torch.from_numpy(np.array(y))
+            batch_y_mark = torch.ones(true.shape)
 
-                # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+            loss = criterion(x.detach().cpu()[:, :, 0], self.args.frequency_map, pred[:, :, 0], true, batch_y_mark)
 
-                # Encoder-Decoder 预测
-                outputs = self.model(batch_x, None, dec_inp, None)
-
-                f_dim = -1 if self.args.features == 'MS' else 0
-                outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
-
-                # 根据损失函数类型进行调用
-                if self.args.loss == 'MSE':
-                    loss = criterion(outputs, batch_y)
-                else:
-                    loss = criterion(batch_x, self.args.frequency_map, outputs, batch_y, batch_y_mark)
-
-                total_loss.append(loss.item())
-
-        avg_loss = np.average(total_loss)
-        self.model.train() # 切换回训练模式
-        return avg_loss
+        self.model.train()
+        return loss
 
     def test(self, setting, test=0):
         _, train_loader = self._get_data(flag='train')
