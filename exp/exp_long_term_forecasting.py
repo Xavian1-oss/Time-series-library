@@ -28,7 +28,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
     def _get_data(self, flag):
         data_set, data_loader = data_provider(self.args, flag)
-        return data_set, dat·a_loader
+        return data_set, data_loader
 
     def _select_optimizer(self):
         model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
