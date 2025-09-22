@@ -33,8 +33,6 @@ if __name__ == '__main__':
                         help='[CRC only] baseline model name, options: [DLinear, Autoformer, etc.]')
     parser.add_argument('--q_val', type=int, default=3, 
                         help='[CRC only] Q value for the STCL_Core in the CRC model')
-    parser.add_argument('--k_val', type=int, default=24, 
-                    help='[CRC only] window size K for physics priors calculation')
     parser.add_argument('--use_dtw', action='store_true', 
                     help='Whether to calculate DTW metric in test phase', 
                     default=False)

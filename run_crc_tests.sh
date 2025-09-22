@@ -1,148 +1,140 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 选 GPU（如果是 MPS 或 CPU，可删掉这行）
+# ============== 基础设置 ==============
 export CUDA_VISIBLE_DEVICES=0
-
-# 通用参数（只跑 M 模式；d_model=64）
-DATASET=ETTh1
-ROOT=./dataset/ETT-small/
-CSV=ETTh1.csv
 
 SEQ_LEN=96
 LABEL_LEN=48
-PRED_LEN=96
 
-# M 模式下通道数
 ENC_IN=7
 DEC_IN=7
 C_OUT=7
 
-# 训练设置
 EPOCHS=50
 PATIENCE=7
 BATCH=32
 LR=1e-3
 
-# CRC 相关
 Q_VAL=3
-K_VAL=24
 TOP_K=5
 
-# 模型规模（按你要求）
 DMODEL=64
 NHEADS=8
 ELAYERS=2
 DLAYERS=1
 DFF=2048
 
-# 是否计算 DTW / 反归一化（按需启用或注释）
 USE_DTW=--use_dtw
 INVERSE=--inverse
 
-echo "================ 基线：TimesNet (CRC, M) ================"
-python -u run.py \
-  --task_name long_term_forecast \
-  --is_training 1 \
-  --model CRC \
-  --baseline_model TimesNet \
-  --model_id etth1_crc_timesnet_m_pl${PRED_LEN}_dm${DMODEL} \
-  --data ${DATASET} \
-  --root_path ${ROOT} \
-  --data_path ${CSV} \
-  --features M \
-  --seq_len ${SEQ_LEN} \
-  --label_len ${LABEL_LEN} \
-  --pred_len ${PRED_LEN} \
-  --enc_in ${ENC_IN} \
-  --dec_in ${DEC_IN} \
-  --c_out ${C_OUT} \
-  --d_model ${DMODEL} \
-  --n_heads ${NHEADS} \
-  --e_layers ${ELAYERS} \
-  --d_layers ${DLAYERS} \
-  --d_ff ${DFF} \
-  --batch_size ${BATCH} \
-  --learning_rate ${LR} \
-  --train_epochs ${EPOCHS} \
-  --patience ${PATIENCE} \
-  --use_gpu True \
-  --gpu_type cuda \
-  --gpu 0 \
-  ${USE_DTW} ${INVERSE} \
-  --q_val ${Q_VAL} \
-  --k_val ${K_VAL} \
-  --top_k ${TOP_K} \
-  --des "CRC_TimesNet_M_d${DMODEL}"
+# ===== 想批量跑的组合 =====
+DATASETS=(ETTh1 ETTh2 ETTm1 ETTm2)
+PRED_LENS=(96 192 336 720)
 
-echo "================ 基线：TimeMixer (CRC, M) ================"
-python -u run.py \
-  --task_name long_term_forecast \
-  --is_training 1 \
-  --model CRC \
-  --baseline_model TimeMixer \
-  --model_id etth1_crc_timemixer_m_pl${PRED_LEN}_dm${DMODEL} \
-  --data ${DATASET} \
-  --root_path ${ROOT} \
-  --data_path ${CSV} \
-  --features M \
-  --seq_len ${SEQ_LEN} \
-  --label_len ${LABEL_LEN} \
-  --pred_len ${PRED_LEN} \
-  --enc_in ${ENC_IN} \
-  --dec_in ${DEC_IN} \
-  --c_out ${C_OUT} \
-  --d_model ${DMODEL} \
-  --n_heads ${NHEADS} \
-  --e_layers ${ELAYERS} \
-  --d_layers ${DLAYERS} \
-  --d_ff ${DFF} \
-  --batch_size ${BATCH} \
-  --learning_rate ${LR} \
-  --train_epochs ${EPOCHS} \
-  --patience ${PATIENCE} \
-  --use_gpu True \
-  --gpu_type cuda \
-  --gpu 0 \
-  ${USE_DTW} ${INVERSE} \
-  --q_val ${Q_VAL} \
-  --k_val ${K_VAL} \
-  --top_k ${TOP_K} \
-  --des "CRC_TimeMixer_M_d${DMODEL}"
+# ===== 各数据集路径与通道数（按你的目录改）=====
+dataset_setup () {
+    local ds="$1"
+    case "$ds" in
+      ETTh1) ROOT="./dataset/ETT-small/"; CSV="ETTh1.csv"; ENC_IN=7; DEC_IN=7; C_OUT=7;;
+      ETTh2) ROOT="./dataset/ETT-small/"; CSV="ETTh2.csv"; ENC_IN=7; DEC_IN=7; C_OUT=7;;
+      ETTm1) ROOT="./dataset/ETT-small/"; CSV="ETTm1.csv"; ENC_IN=7; DEC_IN=7; C_OUT=7;;
+      ETTm2) ROOT="./dataset/ETT-small/"; CSV="ETTm2.csv"; ENC_IN=7; DEC_IN=7; C_OUT=7;;
+      # Weather)     ROOT="./dataset/weather/";       CSV="weather.csv";          ENC_IN=21;  DEC_IN=21;  C_OUT=21;;
+      # Electricity) ROOT="./dataset/electricity/";   CSV="electricity.csv";      ENC_IN=321; DEC_IN=321; C_OUT=321;;
+      # Exchange)    ROOT="./dataset/exchange_rate/"; CSV="exchange_rate.csv";    ENC_IN=8;   DEC_IN=8;   C_OUT=8;;
+      # ILI)         ROOT="./dataset/ili/";           CSV="national_illness.csv"; ENC_IN=7;   DEC_IN=7;   C_OUT=7;;
+      *) echo "未知数据集: $ds"; exit 1;;
+    esac
+}
 
-echo "================ 基线：DLinear (CRC, M) ================"
-python -u run.py \
-  --task_name long_term_forecast \
-  --is_training 1 \
-  --model CRC \
-  --baseline_model DLinear \
-  --model_id etth1_crc_dlinear_m_pl${PRED_LEN}_dm${DMODEL} \
-  --data ${DATASET} \
-  --root_path ${ROOT} \
-  --data_path ${CSV} \
-  --features M \
-  --seq_len ${SEQ_LEN} \
-  --label_len ${LABEL_LEN} \
-  --pred_len ${PRED_LEN} \
-  --enc_in ${ENC_IN} \
-  --dec_in ${DEC_IN} \
-  --c_out ${C_OUT} \
-  --d_model ${DMODEL} \
-  --n_heads ${NHEADS} \
-  --e_layers ${ELAYERS} \
-  --d_layers ${DLAYERS} \
-  --d_ff ${DFF} \
-  --batch_size ${BATCH} \
-  --learning_rate ${LR} \
-  --train_epochs ${EPOCHS} \
-  --patience ${PATIENCE} \
-  --use_gpu True \
-  --gpu_type cuda \
-  --gpu 0 \
-  ${USE_DTW} ${INVERSE} \
-  --q_val ${Q_VAL} \
-  --k_val ${K_VAL} \
-  --top_k ${TOP_K} \
-  --des "CRC_DLinear_M_d${DMODEL}"
+# ============== 日志设置 ==============
+TS="$(date +'%Y%m%d_%H%M%S')"
+LOG_DIR="./logs/multi_${TS}"
+mkdir -p "${LOG_DIR}"
 
-echo "所有 CRC(M) 运行完成。"
+MASTER_LOG="${LOG_DIR}/master.log"
+log() { echo "[$(date +'%F %T')] $*" | tee -a "${MASTER_LOG}"; }
+
+trap 'ecode=$?; [ $ecode -ne 0 ] && log "❌ 脚本异常退出，退出码=${ecode}"; exit $ecode' EXIT
+
+run_with_log () {
+    local baseline="$1"     # TimesNet / TimeMixer / DLinear
+    local ds="$2"           # 数据集
+    local pred="$3"         # 预测步长
+
+    dataset_setup "${ds}"
+
+    local tag="${ds}_crc_${baseline,,}_m_pl${pred}_dm${DMODEL}"
+    local log_file="${LOG_DIR}/${tag}.log"
+
+    log "▶️  开始运行：${ds} / ${baseline} / pred_len=${pred}  (log: ${log_file})"
+
+    {
+      echo "CMD @ $(date +'%F %T')"
+      printf "python -u run.py --task_name long_term_forecast --is_training 1 --model CRC --baseline_model %s " "${baseline}"
+      printf "--model_id %s --data %s --root_path %s --data_path %s " "${tag}" "${ds}" "${ROOT}" "${CSV}"
+      printf "--features M --seq_len %s --label_len %s --pred_len %s " "${SEQ_LEN}" "${LABEL_LEN}" "${pred}"
+      printf "--enc_in %s --dec_in %s --c_out %s " "${ENC_IN}" "${DEC_IN}" "${C_OUT}"
+      printf "--d_model %s --n_heads %s --e_layers %s --d_layers %s --d_ff %s " "${DMODEL}" "${NHEADS}" "${ELAYERS}" "${DLAYERS}" "${DFF}"
+      printf "--batch_size %s --learning_rate %s --train_epochs %s --patience %s " "${BATCH}" "${LR}" "${EPOCHS}" "${PATIENCE}"
+      printf "--use_gpu True --gpu_type cuda --gpu 0 %s %s " "${USE_DTW}" "${INVERSE}"
+      printf "--q_val %s --top_k %s --des CRC_%s_M_d%s\n" "${Q_VAL}" "${TOP_K}" "${baseline}" "${DMODEL}"
+    } | tee -a "${log_file}" >> "${MASTER_LOG}"
+
+    set +e
+    python -u run.py \
+      --task_name long_term_forecast \
+      --is_training 1 \
+      --model CRC \
+      --baseline_model "${baseline}" \
+      --model_id "${tag}" \
+      --data "${ds}" \
+      --root_path "${ROOT}" \
+      --data_path "${CSV}" \
+      --features M \
+      --seq_len "${SEQ_LEN}" \
+      --label_len "${LABEL_LEN}" \
+      --pred_len "${pred}" \
+      --enc_in "${ENC_IN}" \
+      --dec_in "${DEC_IN}" \
+      --c_out "${C_OUT}" \
+      --d_model "${DMODEL}" \
+      --n_heads "${NHEADS}" \
+      --e_layers "${ELAYERS}" \
+      --d_layers "${DLAYERS}" \
+      --d_ff "${DFF}" \
+      --batch_size "${BATCH}" \
+      --learning_rate "${LR}" \
+      --train_epochs "${EPOCHS}" \
+      --patience "${PATIENCE}" \
+      --use_gpu True \
+      --gpu_type cuda \
+      --gpu 0 \
+      ${USE_DTW} ${INVERSE} \
+      --q_val "${Q_VAL}" \
+      --top_k "${TOP_K}" \
+      --des "CRC_${baseline}_M_d${DMODEL}" \
+      2> >(tee -a "${log_file}" >> "${MASTER_LOG}" >&2) \
+      | tee -a "${log_file}" >> "${MASTER_LOG}"
+    ecode=${PIPESTATUS[0]}
+    set -e
+
+    if [ $ecode -eq 0 ]; then
+      log "✅ 完成：${ds} / ${baseline} / pred_len=${pred}"
+    else
+      log "❌ 失败：${ds} / ${baseline} / pred_len=${pred}，退出码=${ecode}（详见 ${log_file}）"
+      return $ecode
+    fi
+}
+
+# ===== 批量：数据集 × 预测步 × 基线 =====
+for ds in "${DATASETS[@]}"; do
+  for pl in "${PRED_LENS[@]}"; do
+    run_with_log TimesNet "${ds}" "${pl}"
+    # run_with_log TimeMixer "${ds}" "${pl}"
+    run_with_log DLinear  "${ds}" "${pl}"
+  done
+done
+
+log "🎉 全部批量运行完成。日志目录：${LOG_DIR}"

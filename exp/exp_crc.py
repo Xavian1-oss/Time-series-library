@@ -205,7 +205,8 @@ class Exp_CRC(Exp_Long_Term_Forecast):
         # ---------- 与 LTF 对齐的可选 inverse ----------
         if getattr(test_set, "scale", False) and getattr(self.args, "inverse", False):
             C_all = W_te.shape[-1]   # Dataset 中 scaler 期望的列数
-            scaler = test_set.scaler
+            train_set, _ = self._get_data(flag='train')
+            scaler = train_set.scaler
             y_te       = self._inverse_like_ltf(y_te,       C_all, scaler)
             yhat_te_bl = self._inverse_like_ltf(yhat_te_bl, C_all, scaler)
             yfinal_te  = self._inverse_like_ltf(yfinal_te,  C_all, scaler)
