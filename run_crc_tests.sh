@@ -70,18 +70,46 @@ run_with_log () {
 
     log "▶️  开始运行：${ds} / ${baseline} / pred_len=${pred}  (log: ${log_file})"
 
+    # ------- 用 heredoc 回显完整命令（避免 printf 解析选项的问题） -------
     {
       echo "CMD @ $(date +'%F %T')"
-      printf "python -u run.py --task_name long_term_forecast --is_training 1 --model CRC --baseline_model %s " "${baseline}"
-      printf "--model_id %s --data %s --root_path %s --data_path %s " "${tag}" "${ds}" "${ROOT}" "${CSV}"
-      printf "--features M --seq_len %s --label_len %s --pred_len %s " "${SEQ_LEN}" "${LABEL_LEN}" "${pred}"
-      printf "--enc_in %s --dec_in %s --c_out %s " "${ENC_IN}" "${DEC_IN}" "${C_OUT}"
-      printf "--d_model %s --n_heads %s --e_layers %s --d_layers %s --d_ff %s " "${DMODEL}" "${NHEADS}" "${ELAYERS}" "${DLAYERS}" "${DFF}"
-      printf "--batch_size %s --learning_rate %s --train_epochs %s --patience %s " "${BATCH}" "${LR}" "${EPOCHS}" "${PATIENCE}"
-      printf "--use_gpu True --gpu_type cuda --gpu 0 %s %s " "${USE_DTW}" "${INVERSE}"
-      printf "--q_val %s --top_k %s --des CRC_%s_M_d%s\n" "${Q_VAL}" "${TOP_K}" "${baseline}" "${DMODEL}"
+      cat <<EOF
+python -u run.py \
+  --task_name long_term_forecast \
+  --is_training 1 \
+  --model CRC \
+  --baseline_model ${baseline} \
+  --model_id ${tag} \
+  --data ${ds} \
+  --root_path ${ROOT} \
+  --data_path ${CSV} \
+  --features M \
+  --seq_len ${SEQ_LEN} \
+  --label_len ${LABEL_LEN} \
+  --pred_len ${pred} \
+  --enc_in ${ENC_IN} \
+  --dec_in ${DEC_IN} \
+  --c_out ${C_OUT} \
+  --d_model ${DMODEL} \
+  --n_heads ${NHEADS} \
+  --e_layers ${ELAYERS} \
+  --d_layers ${DLAYERS} \
+  --d_ff ${DFF} \
+  --batch_size ${BATCH} \
+  --learning_rate ${LR} \
+  --train_epochs ${EPOCHS} \
+  --patience ${PATIENCE} \
+  --use_gpu True \
+  --gpu_type cuda \
+  --gpu 0 \
+  ${USE_DTW} ${INVERSE} \
+  --q_val ${Q_VAL} \
+  --top_k ${TOP_K} \
+  --des CRC_${baseline}_M_d${DMODEL}
+EOF
     } | tee -a "${log_file}" >> "${MASTER_LOG}"
 
+    # ------- 真正执行，同步写入 单模型日志 + 总日志 -------
     set +e
     python -u run.py \
       --task_name long_term_forecast \
