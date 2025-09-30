@@ -25,12 +25,14 @@ ELAYERS=2
 DLAYERS=1
 DFF=2048
 
-USE_DTW=--use_dtw
-INVERSE=--inverse
+PATCH_LEN=16
+
+# USE_DTW=--use_dtw
+INVERSE=''
 
 # ===== 想批量跑的组合 =====
 DATASETS=(ETTh1 ETTh2 ETTm1 ETTm2)
-PRED_LENS=(96 192 336 720)
+PRED_LENS=(96 192 336) # 如果要测试不同步长的话，在括号里添加即可
 
 # ===== 各数据集路径与通道数（按你的目录改）=====
 dataset_setup () {
@@ -95,6 +97,7 @@ python -u run.py \
   --e_layers ${ELAYERS} \
   --d_layers ${DLAYERS} \
   --d_ff ${DFF} \
+  --patch_len "${PATCH_LEN}" \
   --batch_size ${BATCH} \
   --learning_rate ${LR} \
   --train_epochs ${EPOCHS} \
@@ -102,7 +105,7 @@ python -u run.py \
   --use_gpu True \
   --gpu_type cuda \
   --gpu 0 \
-  ${USE_DTW} ${INVERSE} \
+  ${USE_DTW:-} ${INVERSE} \
   --q_val ${Q_VAL} \
   --top_k ${TOP_K} \
   --des CRC_${baseline}_M_d${DMODEL}
@@ -132,6 +135,7 @@ EOF
       --e_layers "${ELAYERS}" \
       --d_layers "${DLAYERS}" \
       --d_ff "${DFF}" \
+      --patch_len "${PATCH_LEN}" \
       --batch_size "${BATCH}" \
       --learning_rate "${LR}" \
       --train_epochs "${EPOCHS}" \
@@ -139,7 +143,7 @@ EOF
       --use_gpu True \
       --gpu_type cuda \
       --gpu 0 \
-      ${USE_DTW} ${INVERSE} \
+      ${USE_DTW:-} ${INVERSE} \
       --q_val "${Q_VAL}" \
       --top_k "${TOP_K}" \
       --des "CRC_${baseline}_M_d${DMODEL}" \
@@ -159,9 +163,10 @@ EOF
 # ===== 批量：数据集 × 预测步 × 基线 =====
 for ds in "${DATASETS[@]}"; do
   for pl in "${PRED_LENS[@]}"; do
+    run_with_log TimeXer "${ds}" "${pl}"
     run_with_log TimesNet "${ds}" "${pl}"
-    # run_with_log TimeMixer "${ds}" "${pl}"
-    run_with_log DLinear  "${ds}" "${pl}"
+    run_with_log Autoformer "${ds}" "${pl}"
+    run_with_log Informer  "${ds}" "${pl}"
   done
 done
 

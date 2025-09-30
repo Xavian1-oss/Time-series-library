@@ -36,6 +36,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_dtw', action='store_true', 
                     help='Whether to calculate DTW metric in test phase', 
                     default=False)
+    parser.add_argument('--patch_len', type=int, default=16, help='patch length for patch-based models')
     
     # data loader
     parser.add_argument('--data', type=str, required=True, default='ETTh1', help='dataset type')
