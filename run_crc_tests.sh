@@ -31,7 +31,7 @@ PATCH_LEN=16
 INVERSE=''
 
 # ===== 想批量跑的组合 =====
-DATASETS=(ETTh1 ETTh2 ETTm1 ETTm2)
+DATASETS=(Weather) # 如果要测试不同数据集的话，在括号里添加即可
 PRED_LENS=(96 192 336) # 如果要测试不同步长的话，在括号里添加即可
 
 # ===== 各数据集路径与通道数（按你的目录改）=====
@@ -42,7 +42,7 @@ dataset_setup () {
       ETTh2) ROOT="./dataset/ETT-small/"; CSV="ETTh2.csv"; ENC_IN=7; DEC_IN=7; C_OUT=7;;
       ETTm1) ROOT="./dataset/ETT-small/"; CSV="ETTm1.csv"; ENC_IN=7; DEC_IN=7; C_OUT=7;;
       ETTm2) ROOT="./dataset/ETT-small/"; CSV="ETTm2.csv"; ENC_IN=7; DEC_IN=7; C_OUT=7;;
-      # Weather)     ROOT="./dataset/weather/";       CSV="weather.csv";          ENC_IN=21;  DEC_IN=21;  C_OUT=21;;
+      Weather)     ROOT="./dataset/weather/";       CSV="weather.csv";          ENC_IN=21;  DEC_IN=21;  C_OUT=21;;
       # Electricity) ROOT="./dataset/electricity/";   CSV="electricity.csv";      ENC_IN=321; DEC_IN=321; C_OUT=321;;
       # Exchange)    ROOT="./dataset/exchange_rate/"; CSV="exchange_rate.csv";    ENC_IN=8;   DEC_IN=8;   C_OUT=8;;
       # ILI)         ROOT="./dataset/ili/";           CSV="national_illness.csv"; ENC_IN=7;   DEC_IN=7;   C_OUT=7;;
@@ -67,6 +67,12 @@ run_with_log () {
 
     dataset_setup "${ds}"
 
+    # 判断数据集是否为自定义类型
+    local data_arg="${ds}"
+    if [[ "${ds}" == "Weather" ]]; then
+        data_arg="custom"
+    fi
+
     local tag="${ds}_crc_${baseline,,}_m_pl${pred}_dm${DMODEL}"
     local log_file="${LOG_DIR}/${tag}.log"
 
@@ -82,7 +88,7 @@ python -u run.py \
   --model CRC \
   --baseline_model ${baseline} \
   --model_id ${tag} \
-  --data ${ds} \
+  --data ${data_arg} \
   --root_path ${ROOT} \
   --data_path ${CSV} \
   --features M \
@@ -120,7 +126,7 @@ EOF
       --model CRC \
       --baseline_model "${baseline}" \
       --model_id "${tag}" \
-      --data "${ds}" \
+      --data "${data_arg}" \
       --root_path "${ROOT}" \
       --data_path "${CSV}" \
       --features M \
@@ -167,6 +173,8 @@ for ds in "${DATASETS[@]}"; do
     run_with_log TimesNet "${ds}" "${pl}"
     run_with_log Autoformer "${ds}" "${pl}"
     run_with_log Informer  "${ds}" "${pl}"
+    run_with_log PatchTST  "${ds}" "${pl}"
+    run_with_log DLinear   "${ds}" "${pl}"
   done
 done
 
